@@ -14,12 +14,13 @@ import (
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
+	"github.com/sagernet/sing/common/logger"
 )
 
 const WithQUIC = false
 
 func init() {
-	dns.RegisterTransport([]string{"quic", "h3"}, func(ctx context.Context, dialer N.Dialer, link string) (dns.Transport, error) {
+	dns.RegisterTransport([]string{"quic", "h3"}, func(ctx context.Context, logger logger.ContextLogger, dialer N.Dialer, link string) (dns.Transport, error) {
 		return nil, C.ErrQUICNotIncluded
 	})
 	v2ray.RegisterQUICConstructor(

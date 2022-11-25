@@ -15,6 +15,7 @@ require (
 	github.com/go-chi/render v1.0.2
 	github.com/gofrs/uuid v4.3.1+incompatible
 	github.com/hashicorp/yamux v0.1.1
+	github.com/insomniacslk/dhcp v0.0.0-20221001123530-5308ebe5334c
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/mholt/acmez v1.0.4
 	github.com/miekg/dns v1.1.50
@@ -24,7 +25,7 @@ require (
 	github.com/sagernet/cloudflare-tls v0.0.0-20221031050923-d70792f4c3a0
 	github.com/sagernet/quic-go v0.0.0-20221108053023-645bcc4f9b15
 	github.com/sagernet/sing v0.0.0-20221008120626-60a9910eefe4
-	github.com/sagernet/sing-dns v0.0.0-20221113031420-c6aaf2ea4b10
+	github.com/sagernet/sing-dns v0.0.0-20221125094022-b75a48df1f96
 	github.com/sagernet/sing-shadowsocks v0.0.0-20221115140728-028358027bfa
 	github.com/sagernet/sing-tun v0.0.0-20221104121441-66c48a57776f
 	github.com/sagernet/sing-vmess v0.0.0-20221109021549-b446d5bdddf0
@@ -66,6 +67,7 @@ require (
 	github.com/sagernet/go-tun2socks v1.16.12-0.20220818015926-16cb67876a61 // indirect
 	github.com/sagernet/netlink v0.0.0-20220905062125-8043b4a9aa97 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/u-root/uio v0.0.0-20210528114334-82958018845c // indirect
 	github.com/vishvananda/netns v0.0.0-20211101163701-50045581ed74 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
