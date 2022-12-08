@@ -38,7 +38,7 @@ func format() error {
 		return E.Cause(err, "read config")
 	}
 	var options option.Options
-	err = options.UnmarshalJSON(configContent)
+	err = options.UnmarshalJSON(false, configContent)
 	if err != nil {
 		return E.Cause(err, "decode config")
 	}

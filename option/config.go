@@ -19,9 +19,12 @@ type _Options struct {
 
 type Options _Options
 
-func (o *Options) UnmarshalJSON(content []byte) error {
+func (o *Options) UnmarshalJSON(disallowUnknownFields bool, content []byte) error {
 	decoder := json.NewDecoder(json.NewCommentFilter(bytes.NewReader(content)))
-	decoder.DisallowUnknownFields()
+	if disallowUnknownFields {
+		decoder.DisallowUnknownFields()
+
+	}
 	err := decoder.Decode((*_Options)(o))
 	if err == nil {
 		return nil

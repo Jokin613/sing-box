@@ -1,0 +1,208 @@
+BASE-DATA:
+  ss: &SS
+    type: shadowsocks
+    method: aes-128-gcm
+    password: jokin88188
+    tcp_fast_open: true
+    multiplex:
+      enabled: true
+      protocol: smux
+      max_connections: 4
+      min_streams: 4
+      max_streams: 0
+  nodes: &NODES
+    type: selector
+    outbounds:
+      - 🇯🇵 Tokyo IEPL
+      - 🇯🇵 Tokyo Neko
+      - 🇯🇵 Tokyo
+      - 🇭🇰 AutoHK
+      - 🇭🇰 HK IEPL
+      - 🇭🇰 HK WIKI
+      - ➜ Direct
+    default: 🇭🇰 AutoHK
+
+  AutoHK: &AutoHK
+    type: urltest
+    outbounds:
+      - 🇭🇰 HK Neko
+      - 🇭🇰 HK XQ
+      - 🇭🇰 HK BJ
+      - 🇭🇰 HK
+    url: 'http://www.gstatic.com/generate_204'
+    interval: '1m'
+    tolerance: 10
+
+log:
+  disabled: false
+  level: info
+
+experimental:
+  clash_api:
+    external_controller: '0.0.0.0:9090'
+    external_ui: ui
+    secret: ''
+    default_mode: rule
+    store_selected: true
+    cache_file: cache.db
+
+dns:
+  servers:
+    - tag: google
+      address: 'tls://8.8.8.8'
+      detour: Proxy
+
+    - tag: Streaming-dns
+      address: 'tls://8.8.8.8'
+      detour: Streaming
+
+    - tag: local
+      address: 223.6.6.6
+      detour: ➜ Direct
+
+  rules:
+    - geosite:
+        - youtube
+        - category-media
+        - disney
+        - netflix
+        - category-porn
+      server: Streaming-dns
+
+    - domain_suffix:
+        - inkiwike.com
+        - jokin.uk
+      geosite: cn
+      server: local
+
+    # - geosite: geolocation-!cn
+    #   server: google
+
+  final: google
+  strategy: ipv4_only
+
+inbounds:
+  - type: redirect
+    tag: redirect-in
+    sniff: true
+    listen: '::'
+    listen_port: 9878
+  - type: tun
+    tag: tun-in
+    # interface_name: utun0
+    inet4_address: 198.18.0.0/16
+    auto_route: true
+    sniff: true
+    stack: system
+
+outbounds:
+  - tag: Proxy
+    <<: *NODES
+  - tag: Streaming
+    <<: *NODES
+  - tag: Speedtest
+    <<: *NODES
+  - tag: Spotify
+    <<: *NODES
+
+  - tag: 🇭🇰 AutoHK
+    <<: *AutoHK
+
+  - tag: 🇯🇵 Tokyo IEPL
+    <<: *SS
+    server: ink-szzf-jp.inkiwike.com
+    server_port: 53433
+
+  - tag: 🇯🇵 Tokyo Neko
+    <<: *SS
+    server: 183.245.7.189
+    server_port: 25244
+
+  - tag: 🇯🇵 Tokyo
+    type: trojan
+    server: jp.jokin.uk
+    server_port: 443
+    password: cbd70ede-2a02-88f9-44ea-e0882971c7f8
+    tls:
+      enabled: true
+      alpn: [http/1.1]
+
+  - tag: 🇭🇰 HK IEPL
+    <<: *SS
+    server: ink-dg-hk-iplc.inkiwike.com
+    server_port: 53433
+
+  - tag: 🇭🇰 HK WIKI
+    <<: *SS
+    server: 211.99.100.94
+    server_port: 25131
+
+  - tag: 🇭🇰 HK
+    <<: *SS
+    server: 154.3.34.152
+    server_port: 53433
+
+  - tag: 🇭🇰 HK Neko
+    <<: *SS
+    server: 183.245.7.190
+    server_port: 25533
+
+  - tag: 🇭🇰 HK XQ
+    <<: *SS
+    server: gzct.xn--kiv15t.cn
+    server_port: 24063
+
+  - tag: 🇭🇰 HK BJ
+    <<: *SS
+    server: bjct.xn--kiv15t.cn
+    server_port: 56022
+
+  - type: direct
+    tag: ➜ Direct
+
+  - type: block
+    tag: block
+
+  - type: dns
+    tag: dns-out
+
+route:
+  geoip:
+    download_url: >-
+      https://github.com/1715173329/sing-geoip/releases/download/202211170726/geoip.db
+    download_detour: Proxy
+  geosite:
+    download_url: >-
+      https://github.com/1715173329/sing-geosite/releases/download/20221124015645/geosite.db
+    download_detour: Proxy
+  rules:
+    - protocol: dns
+      outbound: dns-out
+
+    - geosite:
+        - youtube
+        - category-media
+        - disney
+        - netflix
+        - category-porn
+        - telegram
+        - twitch
+      geoip:
+        - youtube
+        - telegram
+      outbound: Streaming
+
+    - geosite: speedtest
+      geoip: speedtest
+      outbound: Speedtest
+
+    - geosite: spotify
+      geoip: spotify
+      outbound: Spotify
+
+    - geosite: cn
+      geoip: cn
+      outbound: ➜ Direct
+
+  final: 'Proxy'
+  auto_detect_interface: true

@@ -13,7 +13,7 @@ var commandCheck = &cobra.Command{
 	Use:   "check",
 	Short: "Check configuration",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := check()
+		err := check("check")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -25,8 +25,8 @@ func init() {
 	mainCommand.AddCommand(commandCheck)
 }
 
-func check() error {
-	options, err := readConfig()
+func check(action string) error {
+	options, err := readConfig(action)
 	if err != nil {
 		return err
 	}

@@ -2,17 +2,18 @@ package main
 
 import (
 	"context"
+	"github.com/ghodss/yaml"
 	"io"
 	"os"
 	"os/signal"
 	runtimeDebug "runtime/debug"
+	"strings"
 	"syscall"
 
 	"github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
-
 	"github.com/spf13/cobra"
 )
 
@@ -31,7 +32,7 @@ func init() {
 	mainCommand.AddCommand(commandRun)
 }
 
-func readConfig() (option.Options, error) {
+func readConfig(action string) (option.Options, error) {
 	var (
 		configContent []byte
 		err           error
@@ -40,12 +41,29 @@ func readConfig() (option.Options, error) {
 		configContent, err = io.ReadAll(os.Stdin)
 	} else {
 		configContent, err = os.ReadFile(configPath)
+		if err != nil {
+			yamlPath := strings.Replace(configPath, "json", "yaml", 1)
+			configContent, err = os.ReadFile(yamlPath)
+			var jsonConfig []byte
+			jsonConfig, err = yaml.YAMLToJSON(configContent)
+			configContent = jsonConfig
+
+			//var opt option.Options
+			//err = yaml.Unmarshal(configContent, opt)
+
+			//json := jsoniter.ConfigCompatibleWithStandardLibrary
+		}
+
 	}
 	if err != nil {
 		return option.Options{}, E.Cause(err, "read config")
 	}
 	var options option.Options
-	err = options.UnmarshalJSON(configContent)
+	if strings.EqualFold(action, "run") {
+		err = options.UnmarshalJSON(false, configContent)
+	} else {
+		err = options.UnmarshalJSON(true, configContent)
+	}
 	if err != nil {
 		return option.Options{}, E.Cause(err, "decode config")
 	}
@@ -53,7 +71,7 @@ func readConfig() (option.Options, error) {
 }
 
 func create() (*box.Box, context.CancelFunc, error) {
-	options, err := readConfig()
+	options, err := readConfig("run")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -104,7 +122,7 @@ func run() error {
 		for {
 			osSignal := <-osSignals
 			if osSignal == syscall.SIGHUP {
-				err = check()
+				err = check("run")
 				if err != nil {
 					log.Error(E.Cause(err, "reload service"))
 					continue

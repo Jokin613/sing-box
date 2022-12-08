@@ -10,11 +10,13 @@ require (
 	github.com/database64128/tfo-go/v2 v2.0.2
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fsnotify/fsnotify v1.6.0
+	github.com/ghodss/yaml v1.0.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.1
 	github.com/go-chi/render v1.0.2
 	github.com/gofrs/uuid v4.3.1+incompatible
 	github.com/hashicorp/yamux v0.1.1
+	github.com/json-iterator/go v1.1.7
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/mholt/acmez v1.0.4
 	github.com/miekg/dns v1.1.50
@@ -62,6 +64,8 @@ require (
 	github.com/marten-seemann/qpack v0.3.0 // indirect
 	github.com/marten-seemann/qtls-go1-18 v0.1.3 // indirect
 	github.com/marten-seemann/qtls-go1-19 v0.1.1 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sagernet/abx-go v0.0.0-20220819185957-dba1257d738e // indirect
@@ -77,6 +81,7 @@ require (
 	golang.org/x/tools v0.2.0 // indirect
 	google.golang.org/genproto v0.0.0-20210722135532-667f2b7c528f // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
+	gopkg.in/yaml.v2 v2.2.8 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.1.7 // indirect
 )
