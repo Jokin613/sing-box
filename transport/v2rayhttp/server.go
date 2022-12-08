@@ -2,13 +2,13 @@ package v2rayhttp
 
 import (
 	"context"
-	"crypto/tls"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/common/tls"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
@@ -40,16 +40,16 @@ func (s *Server) Network() []string {
 	return []string{N.NetworkTCP}
 }
 
-func NewServer(ctx context.Context, options option.V2RayHTTPOptions, tlsConfig *tls.Config, handler N.TCPConnectionHandler, errorHandler E.Handler) *Server {
+func NewServer(ctx context.Context, options option.V2RayHTTPOptions, tlsConfig tls.ServerConfig, handler N.TCPConnectionHandler, errorHandler E.Handler) (*Server, error) {
 	server := &Server{
 		ctx:          ctx,
 		handler:      handler,
 		errorHandler: errorHandler,
+		h2Server:     new(http2.Server),
 		host:         options.Host,
 		path:         options.Path,
 		method:       options.Method,
 		headers:      make(http.Header),
-		h2Server:     new(http2.Server),
 	}
 	if server.method == "" {
 		server.method = "PUT"
@@ -64,10 +64,16 @@ func NewServer(ctx context.Context, options option.V2RayHTTPOptions, tlsConfig *
 		Handler:           server,
 		ReadHeaderTimeout: C.TCPTimeout,
 		MaxHeaderBytes:    http.DefaultMaxHeaderBytes,
-		TLSConfig:         tlsConfig,
 	}
 	server.h2cHandler = h2c.NewHandler(server, server.h2Server)
-	return server
+	if tlsConfig != nil {
+		stdConfig, err := tlsConfig.Config()
+		if err != nil {
+			return nil, err
+		}
+		server.httpServer.TLSConfig = stdConfig
+	}
+	return server, nil
 }
 
 func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -75,7 +81,6 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		s.h2cHandler.ServeHTTP(writer, request)
 		return
 	}
-
 	host := request.Host
 	if len(s.host) > 0 && !common.Contains(s.host, host) {
 		writer.WriteHeader(http.StatusBadRequest)
@@ -116,10 +121,7 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		s.handler.NewConnection(request.Context(), conn, metadata)
 	} else {
 		conn := &ServerHTTPConn{
-			HTTPConn{
-				request.Body,
-				writer,
-			},
+			newHTTPConn(request.Body, writer),
 			writer.(http.Flusher),
 		}
 		s.handler.NewConnection(request.Context(), conn, metadata)
@@ -131,9 +133,13 @@ func (s *Server) badRequest(request *http.Request, err error) {
 }
 
 func (s *Server) Serve(listener net.Listener) error {
+	fixTLSConfig := s.httpServer.TLSConfig == nil
 	err := http2.ConfigureServer(s.httpServer, s.h2Server)
 	if err != nil {
 		return err
+	}
+	if fixTLSConfig {
+		s.httpServer.TLSConfig = nil
 	}
 	if s.httpServer.TLSConfig == nil {
 		return s.httpServer.Serve(listener)

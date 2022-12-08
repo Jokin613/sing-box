@@ -3,7 +3,6 @@ package dialer
 import (
 	"context"
 	"net"
-	"net/netip"
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
@@ -15,7 +14,7 @@ import (
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
 
-	"github.com/database64128/tfo-go"
+	"github.com/database64128/tfo-go/v2"
 )
 
 var warnBindInterfaceOnUnsupportedPlatform = warning.New(
@@ -54,10 +53,13 @@ var warnTFOOnUnsupportedPlatform = warning.New(
 )
 
 type DefaultDialer struct {
-	dialer      tfo.Dialer
-	udpDialer   net.Dialer
+	dialer4     tfo.Dialer
+	dialer6     tfo.Dialer
+	udpDialer4  net.Dialer
+	udpDialer6  net.Dialer
 	udpListener net.ListenConfig
-	bindUDPAddr string
+	udpAddr4    string
+	udpAddr6    string
 }
 
 func NewDefault(router adapter.Router, options option.DialerOptions) *DefaultDialer {
@@ -65,25 +67,23 @@ func NewDefault(router adapter.Router, options option.DialerOptions) *DefaultDia
 	var listener net.ListenConfig
 	if options.BindInterface != "" {
 		warnBindInterfaceOnUnsupportedPlatform.Check()
-		bindFunc := control.BindToInterface(router.InterfaceBindManager(), options.BindInterface)
+		bindFunc := control.BindToInterface(router.InterfaceFinder(), options.BindInterface, -1)
 		dialer.Control = control.Append(dialer.Control, bindFunc)
 		listener.Control = control.Append(listener.Control, bindFunc)
 	} else if router.AutoDetectInterface() {
-		if C.IsWindows {
-			bindFunc := control.BindToInterfaceIndexFunc(func(network, address string) int {
-				return router.InterfaceMonitor().DefaultInterfaceIndex(M.ParseSocksaddr(address).Addr)
-			})
-			dialer.Control = control.Append(dialer.Control, bindFunc)
-			listener.Control = control.Append(listener.Control, bindFunc)
-		} else {
-			bindFunc := control.BindToInterfaceFunc(router.InterfaceBindManager(), func(network, address string) string {
-				return router.InterfaceMonitor().DefaultInterfaceName(M.ParseSocksaddr(address).Addr)
-			})
-			dialer.Control = control.Append(dialer.Control, bindFunc)
-			listener.Control = control.Append(listener.Control, bindFunc)
-		}
+		const useInterfaceName = C.IsLinux
+		bindFunc := control.BindToInterfaceFunc(router.InterfaceFinder(), func(network string, address string) (interfaceName string, interfaceIndex int) {
+			remoteAddr := M.ParseSocksaddr(address).Addr
+			if C.IsLinux {
+				return router.InterfaceMonitor().DefaultInterfaceName(remoteAddr), -1
+			} else {
+				return "", router.InterfaceMonitor().DefaultInterfaceIndex(remoteAddr)
+			}
+		})
+		dialer.Control = control.Append(dialer.Control, bindFunc)
+		listener.Control = control.Append(listener.Control, bindFunc)
 	} else if router.DefaultInterface() != "" {
-		bindFunc := control.BindToInterface(router.InterfaceBindManager(), router.DefaultInterface())
+		bindFunc := control.BindToInterface(router.InterfaceFinder(), router.DefaultInterface(), -1)
 		dialer.Control = control.Append(dialer.Control, bindFunc)
 		listener.Control = control.Append(listener.Control, bindFunc)
 	}
@@ -112,22 +112,47 @@ func NewDefault(router adapter.Router, options option.DialerOptions) *DefaultDia
 	if options.TCPFastOpen {
 		warnTFOOnUnsupportedPlatform.Check()
 	}
-	var bindUDPAddr string
-	udpDialer := dialer
-	var bindAddress netip.Addr
-	if options.BindAddress != nil {
-		bindAddress = options.BindAddress.Build()
+	var udpFragment bool
+	if options.UDPFragment != nil {
+		udpFragment = *options.UDPFragment
+	} else {
+		udpFragment = options.UDPFragmentDefault
 	}
-	if bindAddress.IsValid() {
-		dialer.LocalAddr = &net.TCPAddr{
-			IP: bindAddress.AsSlice(),
-		}
-		udpDialer.LocalAddr = &net.UDPAddr{
-			IP: bindAddress.AsSlice(),
-		}
-		bindUDPAddr = M.SocksaddrFrom(bindAddress, 0).String()
+	if !udpFragment {
+		dialer.Control = control.Append(dialer.Control, control.DisableUDPFragment())
+		listener.Control = control.Append(listener.Control, control.DisableUDPFragment())
 	}
-	return &DefaultDialer{tfo.Dialer{Dialer: dialer, DisableTFO: !options.TCPFastOpen}, udpDialer, listener, bindUDPAddr}
+	var (
+		dialer4    = dialer
+		udpDialer4 = dialer
+		udpAddr4   string
+	)
+	if options.Inet4BindAddress != nil {
+		bindAddr := options.Inet4BindAddress.Build()
+		dialer4.LocalAddr = &net.TCPAddr{IP: bindAddr.AsSlice()}
+		udpDialer4.LocalAddr = &net.UDPAddr{IP: bindAddr.AsSlice()}
+		udpAddr4 = M.SocksaddrFrom(bindAddr, 0).String()
+	}
+	var (
+		dialer6    = dialer
+		udpDialer6 = dialer
+		udpAddr6   string
+	)
+	if options.Inet6BindAddress != nil {
+		bindAddr := options.Inet6BindAddress.Build()
+		dialer6.LocalAddr = &net.TCPAddr{IP: bindAddr.AsSlice()}
+		udpDialer6.LocalAddr = &net.UDPAddr{IP: bindAddr.AsSlice()}
+		udpAddr6 = M.SocksaddrFrom(bindAddr, 0).String()
+	}
+	return &DefaultDialer{
+		tfo.Dialer{Dialer: dialer4, DisableTFO: !options.TCPFastOpen},
+		tfo.Dialer{Dialer: dialer6, DisableTFO: !options.TCPFastOpen},
+		udpDialer4,
+		udpDialer6,
+		listener,
+		udpAddr4,
+		udpAddr6,
+	}
 }
 
 func (d *DefaultDialer) DialContext(ctx context.Context, network string, address M.Socksaddr) (net.Conn, error) {
@@ -136,11 +161,23 @@ func (d *DefaultDialer) DialContext(ctx context.Context, network string, address
 	}
 	switch N.NetworkName(network) {
 	case N.NetworkUDP:
-		return d.udpDialer.DialContext(ctx, network, address.String())
+		if !address.IsIPv6() {
+			return d.udpDialer4.DialContext(ctx, network, address.String())
+		} else {
+			return d.udpDialer6.DialContext(ctx, network, address.String())
+		}
 	}
-	return d.dialer.DialContext(ctx, network, address.Unwrap().String())
+	if !address.IsIPv6() {
+		return DialSlowContext(&d.dialer4, ctx, network, address)
+	} else {
+		return DialSlowContext(&d.dialer6, ctx, network, address)
+	}
 }
 
 func (d *DefaultDialer) ListenPacket(ctx context.Context, destination M.Socksaddr) (net.PacketConn, error) {
-	return d.udpListener.ListenPacket(ctx, N.NetworkUDP, d.bindUDPAddr)
+	if !destination.IsIPv6() {
+		return d.udpListener.ListenPacket(ctx, N.NetworkUDP, d.udpAddr4)
+	} else {
+		return d.udpListener.ListenPacket(ctx, N.NetworkUDP, d.udpAddr6)
+	}
 }

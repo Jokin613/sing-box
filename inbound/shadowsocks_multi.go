@@ -13,6 +13,7 @@ import (
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
 	"github.com/sagernet/sing/common/buf"
+	E "github.com/sagernet/sing/common/exceptions"
 	F "github.com/sagernet/sing/common/format"
 	N "github.com/sagernet/sing/common/network"
 )
@@ -48,12 +49,18 @@ func newShadowsocksMulti(ctx context.Context, router adapter.Router, logger log.
 	} else {
 		udpTimeout = int64(C.UDPTimeout.Seconds())
 	}
+	if !common.Contains(shadowaead_2022.List, options.Method) {
+		return nil, E.New("unsupported method: " + options.Method)
+	}
 	service, err := shadowaead_2022.NewMultiServiceWithPassword[int](
 		options.Method,
 		options.Password,
 		udpTimeout,
 		adapter.NewUpstreamContextHandler(inbound.newConnection, inbound.newPacketConnection, inbound),
 	)
+	if err != nil {
+		return nil, err
+	}
 	err = service.UpdateUsersWithPasswords(common.MapIndexed(options.Users, func(index int, user option.ShadowsocksUser) int {
 		return index
 	}), common.Map(options.Users, func(user option.ShadowsocksUser) string {

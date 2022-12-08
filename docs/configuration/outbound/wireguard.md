@@ -7,13 +7,16 @@
   
   "server": "127.0.0.1",
   "server_port": 1080,
+  "system_interface": false,
+  "interface_name": "wg0",
   "local_address": [
-    "10.0.0.1",
     "10.0.0.2/32"
   ],
   "private_key": "YNXtAzepDqRv9H52osJVDQnznT5AM11eCK3ESpwSt04=",
   "peer_public_key": "Z1XXLsKYkYxuiYjJIkRvtIKFepCYHTgON+GwPq7SOV4=",
   "pre_shared_key": "31aIhAPwktDGpH4JDhA8GNvjFXEf/a6+UaQRyOAiyfM=",
+  "reserved": [0, 0, 0],
+  "workers": 4,
   "mtu": 1408,
   "network": "tcp",
 
@@ -24,6 +27,10 @@
 !!! warning ""
 
     WireGuard is not included by default, see [Installation](/#installation).
+
+!!! warning ""
+
+    gVisor, which is required by the unprivileged WireGuard is not included by default, see [Installation](/#installation).
 
 ### Fields
 
@@ -39,11 +46,23 @@ The server address.
 
 The server port.
 
+#### system_interface
+
+Use system tun support.
+
+Requires privilege and cannot conflict with system interfaces.
+
+Forced if gVisor not included in the build.
+
+#### interface_name
+
+Custom device name when `system_interface` enabled.
+
 #### local_address
 
 ==Required==
 
-List of IP (v4 or v6) addresses (optionally with CIDR masks) to be assigned to the interface.
+List of IP (v4 or v6) address prefixes to be assigned to the interface.
 
 #### private_key
 
@@ -66,9 +85,21 @@ WireGuard peer public key.
 
 WireGuard pre-shared key.
 
+#### reserved
+
+WireGuard reserved field bytes.
+
+#### workers
+
+WireGuard worker count.
+
+CPU count is used by default.
+
 #### mtu
 
-WireGuard MTU. 1408 will be used if empty.
+WireGuard MTU.
+
+1408 will be used if empty.
 
 #### network
 

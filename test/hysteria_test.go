@@ -9,9 +9,6 @@ import (
 )
 
 func TestHysteriaSelf(t *testing.T) {
-	if !C.QUIC_AVAILABLE {
-		t.Skip("QUIC not included")
-	}
 	_, certPem, keyPem := createSelfSignedCertificate(t, "example.org")
 	startInstance(t, option.Options{
 		Inbounds: []option.Inbound{
@@ -32,10 +29,12 @@ func TestHysteriaSelf(t *testing.T) {
 						Listen:     option.ListenAddress(netip.IPv4Unspecified()),
 						ListenPort: serverPort,
 					},
-					UpMbps:     100,
-					DownMbps:   100,
-					AuthString: "password",
-					Obfs:       "fuck me till the daylight",
+					UpMbps:   100,
+					DownMbps: 100,
+					Users: []option.HysteriaUser{{
+						AuthString: "password",
+					}},
+					Obfs: "fuck me till the daylight",
 					TLS: &option.InboundTLSOptions{
 						Enabled:         true,
 						ServerName:      "example.org",
@@ -84,9 +83,6 @@ func TestHysteriaSelf(t *testing.T) {
 }
 
 func TestHysteriaInbound(t *testing.T) {
-	if !C.QUIC_AVAILABLE {
-		t.Skip("QUIC not included")
-	}
 	caPem, certPem, keyPem := createSelfSignedCertificate(t, "example.org")
 	startInstance(t, option.Options{
 		Inbounds: []option.Inbound{
@@ -97,10 +93,12 @@ func TestHysteriaInbound(t *testing.T) {
 						Listen:     option.ListenAddress(netip.IPv4Unspecified()),
 						ListenPort: serverPort,
 					},
-					UpMbps:     100,
-					DownMbps:   100,
-					AuthString: "password",
-					Obfs:       "fuck me till the daylight",
+					UpMbps:   100,
+					DownMbps: 100,
+					Users: []option.HysteriaUser{{
+						AuthString: "password",
+					}},
+					Obfs: "fuck me till the daylight",
 					TLS: &option.InboundTLSOptions{
 						Enabled:         true,
 						ServerName:      "example.org",
@@ -120,13 +118,10 @@ func TestHysteriaInbound(t *testing.T) {
 			caPem:                  "/etc/hysteria/ca.pem",
 		},
 	})
-	testSuit(t, clientPort, testPort)
+	testSuitSimple1(t, clientPort, testPort)
 }
 
 func TestHysteriaOutbound(t *testing.T) {
-	if !C.QUIC_AVAILABLE {
-		t.Skip("QUIC not included")
-	}
 	_, certPem, keyPem := createSelfSignedCertificate(t, "example.org")
 	startDockerContainer(t, DockerOptions{
 		Image: ImageHysteria,
@@ -171,5 +166,5 @@ func TestHysteriaOutbound(t *testing.T) {
 			},
 		},
 	})
-	testSuit(t, clientPort, testPort)
+	testSuitSimple1(t, clientPort, testPort)
 }

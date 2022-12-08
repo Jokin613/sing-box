@@ -1,3 +1,55 @@
+#### 1.1
+
+* Fix close clash cache
+
+Important changes since 1.0:
+
+* Add support for use with android VPNService
+* Add tun support for WireGuard outbound
+* Add system tun stack
+* Add comment filter for config
+* Add option for allow optional proxy protocol header
+* Add Clash mode and persistence support
+* Add TLS ECH and uTLS support for outbound TLS options
+* Add internal simple-obfs and v2ray-plugin
+* Add ShadowsocksR outbound
+* Add VLESS outbound and XUDP
+* Skip wait for hysteria tcp handshake response
+* Add v2ray mux support for all inbound
+* Add XUDP support for VMess 
+* Improve websocket writer
+* Refine tproxy write back
+* Fix DNS leak caused by
+  Windows' ordinary multihomed DNS resolution behavior
+* Add sniff_timeout listen option
+* Add custom route support for tun
+* Add option for custom wireguard reserved bytes
+* Split bind_address into ipv4 and ipv6
+* Add ShadowTLS v1 and v2 support
+
+#### 1.1-rc1
+
+* Fix TLS config for h2 server
+* Fix crash when input bad method in shadowsocks multi-user inbound
+* Fix listen UDP
+* Fix check invalid packet on macOS
+
+#### 1.1-beta18
+
+* Enhance defense against active probe for shadowtls server **1**
+
+**1**:
+
+The `fallback_after` option has been removed.
+
+#### 1.1-beta17
+
+* Fix shadowtls server **1**
+
+*1*:
+
+Added [fallback_after](/configuration/inbound/shadowtls#fallback_after) option.
+
 #### 1.0.7
 
 * Add support for new x/h2 deadline
@@ -11,6 +63,83 @@
 * Fix udp connect for mux client
 * Fix default dns transport strategy
 
+#### 1.1-beta16
+
+* Improve shadowtls server
+* Fix default dns transport strategy
+* Update uTLS to v1.2.0
+
+#### 1.1-beta15
+
+* Add support for new x/h2 deadline
+* Fix udp connect for mux client
+* Fix dns buffer
+* Fix quic dns retry
+* Fix create TLS config
+* Fix websocket alpn
+* Fix tor geoip
+
+#### 1.1-beta14
+
+* Add multi-user support for hysteria inbound **1**
+* Add custom tls client support for std grpc
+* Fix smux keep alive
+* Fix vmess request buffer
+* Fix default local DNS server behavior
+* Fix h2c transport
+
+*1*:
+
+The `auth` and `auth_str` fields have been replaced by the `users` field.
+
+#### 1.1-beta13
+
+* Add custom worker count option for WireGuard outbound
+* Split bind_address into ipv4 and ipv6
+* Move WFP manipulation to strict route
+* Fix WireGuard outbound panic when close
+* Fix macOS Ventura process name match
+* Fix QUIC connection migration by @HyNetwork
+* Fix handling QUIC client SNI by @HyNetwork
+
+#### 1.1-beta12
+
+* Fix uTLS config
+* Update quic-go to v0.30.0
+* Update cloudflare-tls to go1.18.7
+
+#### 1.1-beta11
+
+* Add option for custom wireguard reserved bytes
+* Fix shadowtls v2
+* Fix h3 dns transport
+* Fix copy pipe
+* Fix decrypt xplus packet
+* Fix v2ray api
+* Suppress no network error
+* Improve local dns transport
+
+#### 1.1-beta10
+
+* Add [sniff_timeout](/configuration/shared/listen#sniff_timeout) listen option
+* Add [custom route](/configuration/inbound/tun#inet4_route_address) support for tun **1**
+* Fix interface monitor
+* Fix websocket headroom
+* Fix uTLS handshake
+* Fix ssh outbound
+* Fix sniff fragmented quic client hello
+* Fix DF for hysteria
+* Fix naive overflow
+* Check destination before udp connect
+* Update uTLS to v1.1.5
+* Update tfo-go to v2.0.2
+* Update fsnotify to v1.6.0
+* Update grpc to v1.50.1
+
+*1*:
+
+The `strict_route` on windows is removed.
+
 #### 1.0.6
 
 * Fix ssh outbound
@@ -18,11 +147,72 @@
 * Fix naive overflow
 * Check destination before udp connect
 
+#### 1.1-beta9
+
+* Fix windows route **1**
+* Add [v2ray statistics api](/configuration/experimental#v2ray-api-fields)
+* Add ShadowTLS v2 support **2**
+* Fixes and improvements
+
+**1**:
+
+* Fix DNS leak caused by
+  Windows' [ordinary multihomed DNS resolution behavior](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-R2-and-2008/dd197552%28v%3Dws.10%29)
+* Flush Windows DNS cache when start/close
+
+**2**:
+
+See [ShadowTLS inbound](/configuration/inbound/shadowtls#version)
+and [ShadowTLS outbound](/configuration/outbound/shadowtls#version)
+
+#### 1.1-beta8
+
+* Fix leaks on close
+* Improve websocket writer
+* Refine tproxy write back
+* Refine 4in6 processing
+* Fix shadowsocks plugins
+* Fix missing source address from transport connection
+* Fix fqdn socks5 outbound connection
+* Fix read source address from grpc-go
+
 #### 1.0.5
 
 * Fix missing source address from transport connection
 * Fix fqdn socks5 outbound connection
 * Fix read source address from grpc-go
+
+#### 1.1-beta7
+
+* Add v2ray mux and XUDP support for VMess inbound
+* Add XUDP support for VMess outbound
+* Disable DF on direct outbound by default
+* Fix bugs in 1.1-beta6
+
+#### 1.1-beta6
+
+* Add [URLTest outbound](/configuration/outbound/urltest)
+* Fix bugs in 1.1-beta5
+
+#### 1.1-beta5
+
+* Print tags in version command
+* Redirect clash hello to external ui
+* Move shadowsocksr implementation to clash
+* Make gVisor optional **1**
+* Refactor to miekg/dns
+* Refactor bind control
+* Fix build on go1.18
+* Fix clash store-selected
+* Fix close grpc conn
+* Fix port rule match logic
+* Fix clash api proxy type
+
+*1*:
+
+The build tag `no_gvisor` is replaced by `with_gvisor`.
+
+The default tun stack is changed to system.
 
 #### 1.0.4
 
@@ -30,16 +220,94 @@
 * Fix port rule match logic
 * Fix clash api proxy type
 
+#### 1.1-beta4
+
+* Add internal simple-obfs and v2ray-plugin [Shadowsocks plugins](/configuration/outbound/shadowsocks#plugin)
+* Add [ShadowsocksR outbound](/configuration/outbound/shadowsocksr)
+* Add [VLESS outbound and XUDP](/configuration/outbound/vless)
+* Skip wait for hysteria tcp handshake response
+* Fix socks4 client
+* Fix hysteria inbound
+* Fix concurrent write
+
 #### 1.0.3
 
 * Fix socks4 client
 * Fix hysteria inbound
 * Fix concurrent write
 
+#### 1.1-beta3
+
+* Fix using custom TLS client in http2 client
+* Fix bugs in 1.1-beta2
+
+#### 1.1-beta2
+
+* Add Clash mode and persistence support **1**
+* Add TLS ECH and uTLS support for outbound TLS options **2**
+* Fix socks4 request
+* Fix processing empty dns result
+
+*1*:
+
+Switching modes using the Clash API, and `store-selected` are now supported,
+see [Experimental](/configuration/experimental).
+
+*2*:
+
+ECH (Encrypted Client Hello) is a TLS extension that allows a client to encrypt the first part of its ClientHello
+message, see [TLS#ECH](/configuration/shared/tls#ech).
+
+uTLS is a fork of "crypto/tls", which provides ClientHello fingerprinting resistance,
+see [TLS#uTLS](/configuration/shared/tls#utls).
+
 #### 1.0.2
 
 * Fix socks4 request
 * Fix processing empty dns result
+
+#### 1.1-beta1
+
+* Add support for use with android VPNService **1**
+* Add tun support for WireGuard outbound **2**
+* Add system tun stack **3**
+* Add comment filter for config **4**
+* Add option for allow optional proxy protocol header
+* Add half close for smux
+* Set UDP DF by default **5**
+* Set default tun mtu to 9000
+* Update gVisor to 20220905.0
+
+*1*:
+
+In previous versions, Android VPN would not work with tun enabled.
+
+The usage of tun over VPN and VPN over tun is now supported, see [Tun Inbound](/configuration/inbound/tun#auto_route).
+
+*2*:
+
+In previous releases, WireGuard outbound support was backed by the lower performance gVisor virtual interface.
+
+It achieves the same performance as wireguard-go by providing automatic system interface support.
+
+*3*:
+
+It does not depend on gVisor and has better performance in some cases.
+
+It is less compatible and may not be available in some environments.
+
+*4*:
+
+Annotated json configuration files are now supported.
+
+*5*:
+
+UDP fragmentation is now blocked by default.
+
+Including shadowsocks-libev, shadowsocks-rust and quic-go all disable segmentation by default.
+
+See [Dial Fields](/configuration/shared/dial#udp_fragment)
+and [Listen Fields](/configuration/shared/listen#udp_fragment).
 
 #### 1.0.1
 

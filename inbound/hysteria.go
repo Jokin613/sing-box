@@ -3,22 +3,25 @@
 package inbound
 
 import (
-	"bytes"
 	"context"
 	"sync"
 
 	"github.com/sagernet/quic-go"
 	"github.com/sagernet/quic-go/congestion"
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/common/tls"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/transport/hysteria"
-	"github.com/sagernet/sing-dns"
 	"github.com/sagernet/sing/common"
+	"github.com/sagernet/sing/common/auth"
 	E "github.com/sagernet/sing/common/exceptions"
+	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
+
+	"golang.org/x/exp/slices"
 )
 
 var _ adapter.Inbound = (*Hysteria)(nil)
@@ -26,8 +29,9 @@ var _ adapter.Inbound = (*Hysteria)(nil)
 type Hysteria struct {
 	myInboundAdapter
 	quicConfig   *quic.Config
-	tlsConfig    *TLSConfig
-	authKey      []byte
+	tlsConfig    tls.ServerConfig
+	authKey      []string
+	authUser     []string
 	xplusKey     []byte
 	sendBPS      uint64
 	recvBPS      uint64
@@ -60,12 +64,16 @@ func NewHysteria(ctx context.Context, router adapter.Router, logger log.ContextL
 	if quicConfig.MaxIncomingStreams == 0 {
 		quicConfig.MaxIncomingStreams = hysteria.DefaultMaxIncomingStreams
 	}
-	var auth []byte
-	if len(options.Auth) > 0 {
-		auth = options.Auth
-	} else {
-		auth = []byte(options.AuthString)
-	}
+	authKey := common.Map(options.Users, func(it option.HysteriaUser) string {
+		if len(it.Auth) > 0 {
+			return string(it.Auth)
+		} else {
+			return it.AuthString
+		}
+	})
+	authUser := common.Map(options.Users, func(it option.HysteriaUser) string {
+		return it.Name
+	})
 	var xplus []byte
 	if options.Obfs != "" {
 		xplus = []byte(options.Obfs)
@@ -104,7 +112,8 @@ func NewHysteria(ctx context.Context, router adapter.Router, logger log.ContextL
 			listenOptions: options.ListenOptions,
 		},
 		quicConfig:  quicConfig,
-		authKey:     auth,
+		authKey:     authKey,
+		authUser:    authUser,
 		xplusKey:    xplus,
 		sendBPS:     up,
 		recvBPS:     down,
@@ -116,7 +125,7 @@ func NewHysteria(ctx context.Context, router adapter.Router, logger log.ContextL
 	if len(options.TLS.ALPN) == 0 {
 		options.TLS.ALPN = []string{hysteria.DefaultALPN}
 	}
-	tlsConfig, err := NewTLSConfig(ctx, logger, common.PtrValueOrDefault(options.TLS))
+	tlsConfig, err := tls.NewServer(ctx, logger, common.PtrValueOrDefault(options.TLS))
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +146,11 @@ func (h *Hysteria) Start() error {
 	if err != nil {
 		return err
 	}
-	listener, err := quic.Listen(packetConn, h.tlsConfig.Config(), h.quicConfig)
+	rawConfig, err := h.tlsConfig.Config()
+	if err != nil {
+		return err
+	}
+	listener, err := quic.Listen(packetConn, rawConfig, h.quicConfig)
 	if err != nil {
 		return err
 	}
@@ -154,7 +167,6 @@ func (h *Hysteria) acceptLoop() {
 		if err != nil {
 			return
 		}
-		h.logger.InfoContext(ctx, "inbound connection from ", conn.RemoteAddr())
 		go func() {
 			hErr := h.accept(ctx, conn)
 			if hErr != nil {
@@ -174,12 +186,21 @@ func (h *Hysteria) accept(ctx context.Context, conn quic.Connection) error {
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(clientHello.Auth, h.authKey) {
+	userIndex := slices.Index(h.authKey, string(clientHello.Auth))
+	if userIndex == -1 {
 		err = hysteria.WriteServerHello(controlStream, hysteria.ServerHello{
 			Message: "wrong password",
 		})
 		return E.Errors(E.New("wrong password: ", string(clientHello.Auth)), err)
 	}
+	user := h.authUser[userIndex]
+	if user == "" {
+		user = F.ToString(userIndex)
+	} else {
+		ctx = auth.ContextWithUser(ctx, user)
+	}
+	h.logger.InfoContext(ctx, "[", user, "] inbound connection from ", conn.RemoteAddr())
+	h.logger.DebugContext(ctx, "peer send speed: ", clientHello.SendBPS/1024/1024, " MBps, peer recv speed: ", clientHello.RecvBPS/1024/1024, " MBps")
 	if clientHello.SendBPS == 0 || clientHello.RecvBPS == 0 {
 		return E.New("invalid rate from client")
 	}
@@ -253,12 +274,10 @@ func (h *Hysteria) acceptStream(ctx context.Context, conn quic.Connection, strea
 	var metadata adapter.InboundContext
 	metadata.Inbound = h.tag
 	metadata.InboundType = C.TypeHysteria
-	metadata.SniffEnabled = h.listenOptions.SniffEnabled
-	metadata.SniffOverrideDestination = h.listenOptions.SniffOverrideDestination
-	metadata.DomainStrategy = dns.DomainStrategy(h.listenOptions.DomainStrategy)
-	metadata.Source = M.SocksaddrFromNet(conn.RemoteAddr())
-	metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr())
-	metadata.Destination = M.ParseSocksaddrHostPort(request.Host, request.Port)
+	metadata.InboundOptions = h.listenOptions.InboundOptions
+	metadata.Source = M.SocksaddrFromNet(conn.RemoteAddr()).Unwrap()
+	metadata.OriginDestination = M.SocksaddrFromNet(conn.LocalAddr()).Unwrap()
+	metadata.Destination = M.ParseSocksaddrHostPort(request.Host, request.Port).Unwrap()
 
 	if !request.UDP {
 		err = hysteria.WriteServerResponse(stream, hysteria.ServerResponse{
@@ -268,7 +287,7 @@ func (h *Hysteria) acceptStream(ctx context.Context, conn quic.Connection, strea
 			return err
 		}
 		h.logger.InfoContext(ctx, "inbound connection to ", metadata.Destination)
-		return h.router.RouteConnection(ctx, hysteria.NewConn(stream, metadata.Destination), metadata)
+		return h.router.RouteConnection(ctx, hysteria.NewConn(stream, metadata.Destination, false), metadata)
 	} else {
 		h.logger.InfoContext(ctx, "inbound packet connection to ", metadata.Destination)
 		var id uint32
@@ -309,6 +328,6 @@ func (h *Hysteria) Close() error {
 	return common.Close(
 		&h.myInboundAdapter,
 		h.listener,
-		common.PtrOrNil(h.tlsConfig),
+		h.tlsConfig,
 	)
 }

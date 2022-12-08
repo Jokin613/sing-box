@@ -2,14 +2,15 @@ package inbound
 
 import (
 	"context"
-	"crypto/tls"
 	"net"
 	"os"
 
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/common/tls"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing-box/transport/trojan"
 	"github.com/sagernet/sing-box/transport/v2ray"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/auth"
@@ -17,7 +18,6 @@ import (
 	F "github.com/sagernet/sing/common/format"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
-	"github.com/sagernet/sing/protocol/trojan"
 )
 
 var (
@@ -29,7 +29,7 @@ type Trojan struct {
 	myInboundAdapter
 	service                  *trojan.Service[int]
 	users                    []option.TrojanUser
-	tlsConfig                *TLSConfig
+	tlsConfig                tls.ServerConfig
 	fallbackAddr             M.Socksaddr
 	fallbackAddrTLSNextProto map[string]M.Socksaddr
 	transport                adapter.V2RayServerTransport
@@ -49,7 +49,7 @@ func NewTrojan(ctx context.Context, router adapter.Router, logger log.ContextLog
 		users: options.Users,
 	}
 	if options.TLS != nil {
-		tlsConfig, err := NewTLSConfig(ctx, logger, common.PtrValueOrDefault(options.TLS))
+		tlsConfig, err := tls.NewServer(ctx, logger, common.PtrValueOrDefault(options.TLS))
 		if err != nil {
 			return nil, err
 		}
@@ -89,11 +89,7 @@ func NewTrojan(ctx context.Context, router adapter.Router, logger log.ContextLog
 		return nil, err
 	}
 	if options.Transport != nil {
-		var tlsConfig *tls.Config
-		if inbound.tlsConfig != nil {
-			tlsConfig = inbound.tlsConfig.Config()
-		}
-		inbound.transport, err = v2ray.NewServerTransport(ctx, common.PtrValueOrDefault(options.Transport), tlsConfig, adapter.NewUpstreamHandler(adapter.InboundContext{}, inbound.newTransportConnection, nil, nil), inbound)
+		inbound.transport, err = v2ray.NewServerTransport(ctx, common.PtrValueOrDefault(options.Transport), inbound.tlsConfig, adapter.NewUpstreamHandler(adapter.InboundContext{}, inbound.newTransportConnection, nil, nil), inbound)
 		if err != nil {
 			return nil, E.Cause(err, "create server transport: ", options.Transport.Type)
 		}
@@ -143,7 +139,7 @@ func (h *Trojan) Start() error {
 func (h *Trojan) Close() error {
 	return common.Close(
 		&h.myInboundAdapter,
-		common.PtrOrNil(h.tlsConfig),
+		h.tlsConfig,
 		h.transport,
 	)
 }
@@ -154,10 +150,14 @@ func (h *Trojan) newTransportConnection(ctx context.Context, conn net.Conn, meta
 }
 
 func (h *Trojan) NewConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
+	var err error
 	if h.tlsConfig != nil && h.transport == nil {
-		conn = tls.Server(conn, h.tlsConfig.Config())
+		conn, err = tls.ServerHandshake(ctx, conn, h.tlsConfig)
+		if err != nil {
+			return err
+		}
 	}
-	return h.service.NewConnection(adapter.WithContext(log.ContextWithNewID(ctx), &metadata), conn, adapter.UpstreamMetadata(metadata))
+	return h.service.NewConnection(adapter.WithContext(ctx, &metadata), conn, adapter.UpstreamMetadata(metadata))
 }
 
 func (h *Trojan) NewPacketConnection(ctx context.Context, conn N.PacketConn, metadata adapter.InboundContext) error {
@@ -182,7 +182,7 @@ func (h *Trojan) newConnection(ctx context.Context, conn net.Conn, metadata adap
 func (h *Trojan) fallbackConnection(ctx context.Context, conn net.Conn, metadata adapter.InboundContext) error {
 	var fallbackAddr M.Socksaddr
 	if len(h.fallbackAddrTLSNextProto) > 0 {
-		if tlsConn, loaded := common.Cast[*tls.Conn](conn); loaded {
+		if tlsConn, loaded := common.Cast[tls.Conn](conn); loaded {
 			connectionState := tlsConn.ConnectionState()
 			if connectionState.NegotiatedProtocol != "" {
 				if fallbackAddr, loaded = h.fallbackAddrTLSNextProto[connectionState.NegotiatedProtocol]; !loaded {
@@ -192,6 +192,9 @@ func (h *Trojan) fallbackConnection(ctx context.Context, conn net.Conn, metadata
 		}
 	}
 	if !fallbackAddr.IsValid() {
+		if !h.fallbackAddr.IsValid() {
+			return E.New("fallback disabled by default")
+		}
 		fallbackAddr = h.fallbackAddr
 	}
 	h.logger.InfoContext(ctx, "fallback connection to ", fallbackAddr)

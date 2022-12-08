@@ -14,9 +14,37 @@ import (
 type HTTPConn struct {
 	reader io.Reader
 	writer io.Writer
+	create chan struct{}
+	err    error
+}
+
+func newHTTPConn(reader io.Reader, writer io.Writer) HTTPConn {
+	return HTTPConn{
+		reader: reader,
+		writer: writer,
+	}
+}
+
+func newLateHTTPConn(writer io.Writer) *HTTPConn {
+	return &HTTPConn{
+		create: make(chan struct{}),
+		writer: writer,
+	}
+}
+
+func (c *HTTPConn) setup(reader io.Reader, err error) {
+	c.reader = reader
+	c.err = err
+	close(c.create)
 }
 
 func (c *HTTPConn) Read(b []byte) (n int, err error) {
+	if c.reader == nil {
+		<-c.create
+		if c.err != nil {
+			return 0, c.err
+		}
+	}
 	n, err = c.reader.Read(b)
 	return n, baderror.WrapH2(err)
 }
@@ -39,33 +67,30 @@ func (c *HTTPConn) RemoteAddr() net.Addr {
 }
 
 func (c *HTTPConn) SetDeadline(t time.Time) error {
-	responseWriter, loaded := c.writer.(interface {
+	if responseWriter, loaded := c.writer.(interface {
 		SetWriteDeadline(time.Time) error
-	})
-	if !loaded {
-		return os.ErrInvalid
+	}); loaded {
+		return responseWriter.SetWriteDeadline(t)
 	}
-	return responseWriter.SetWriteDeadline(t)
+	return os.ErrInvalid
 }
 
 func (c *HTTPConn) SetReadDeadline(t time.Time) error {
-	responseWriter, loaded := c.writer.(interface {
+	if responseWriter, loaded := c.writer.(interface {
 		SetReadDeadline(time.Time) error
-	})
-	if !loaded {
-		return os.ErrInvalid
+	}); loaded {
+		return responseWriter.SetReadDeadline(t)
 	}
-	return responseWriter.SetReadDeadline(t)
+	return os.ErrInvalid
 }
 
 func (c *HTTPConn) SetWriteDeadline(t time.Time) error {
-	responseWriter, loaded := c.writer.(interface {
+	if responseWriter, loaded := c.writer.(interface {
 		SetWriteDeadline(time.Time) error
-	})
-	if !loaded {
-		return os.ErrInvalid
+	}); loaded {
+		return responseWriter.SetWriteDeadline(t)
 	}
-	return responseWriter.SetWriteDeadline(t)
+	return os.ErrInvalid
 }
 
 type ServerHTTPConn struct {
